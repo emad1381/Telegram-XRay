@@ -521,6 +521,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     private final static int na_menu_delete_unavailable = 1007;
     private final static int na_menu_refresh_subscriptions = 1008;
     private final static int na_menu_hwid_mode = 1009;
+    private final static int na_menu_sort_by_ping = 1010;
 
     @Override
     public View createView(Context context) {
@@ -556,6 +557,16 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         otherItem.addSubItem(na_menu_retest_ping, LocaleController.getString("RetestPing", R.string.RetestPing)).setOnClickListener((v) -> {
             checkProxyList(true);
             updateVisibleProxyStatuses();
+        });
+        otherItem.addSubItem(na_menu_sort_by_ping, LocaleController.getString("SortByPing", R.string.SortByPing)).setOnClickListener((v) -> {
+            java.util.Collections.sort(SharedConfig.proxyList, (p1, p2) -> {
+                if (p1.available && !p2.available) return -1;
+                if (!p1.available && p2.available) return 1;
+                if (!p1.available && !p2.available) return 0;
+                return Long.compare(p1.ping, p2.ping);
+            });
+            SharedConfig.saveProxyList();
+            updateRows(true);
         });
         otherItem.addSubItem(na_menu_refresh_subscriptions, LocaleController.getString("RefreshProxySubscriptions", R.string.RefreshProxySubscriptions)).setOnClickListener((v) -> ProxyUtil.refreshSubscriptions(getParentActivity()));
         otherItem.addSubItem(na_menu_delete_all, LocaleController.getString("DeleteAllServer", R.string.DeleteAllServer)).setOnClickListener((v) -> {

@@ -26,26 +26,56 @@ public class ProxyRotationController implements NotificationCenter.NotificationC
         boolean startedCheck = false;
         for (int i = 0; i < SharedConfig.proxyList.size(); i++) {
             SharedConfig.ProxyInfo proxyInfo = SharedConfig.proxyList.get(i);
-            if (proxyInfo.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
-                continue;
-            }
             if (proxyInfo.checking || SystemClock.elapsedRealtime() - proxyInfo.availableCheckTime < 2 * 60 * 1000) {
                 continue;
             }
             startedCheck = true;
             proxyInfo.checking = true;
-            proxyInfo.proxyCheckPingId = ConnectionsManager.getInstance(currentAccount).checkProxy(proxyInfo.address, proxyInfo.port, proxyInfo.username, proxyInfo.password, proxyInfo.secret, time -> AndroidUtilities.runOnUIThread(() -> {
-                proxyInfo.availableCheckTime = SystemClock.elapsedRealtime();
-                proxyInfo.checking = false;
-                if (time == -1) {
-                    proxyInfo.available = false;
-                    proxyInfo.ping = 0;
-                } else {
-                    proxyInfo.ping = time;
-                    proxyInfo.available = true;
-                }
-                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxyCheckDone, proxyInfo);
-            }));
+            if (proxyInfo.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+                final long start = SystemClock.elapsedRealtime();
+                Utilities.globalQueue.postRunnable(() -> {
+                    long time = -1;
+                    boolean ok = false;
+                    java.net.Socket socket = new java.net.Socket();
+                    try {
+                        socket.connect(new java.net.InetSocketAddress(proxyInfo.address, proxyInfo.port), 2000);
+                        ok = true;
+                        time = SystemClock.elapsedRealtime() - start;
+                    } catch (Exception ignored) {
+                    } finally {
+                        try {
+                            socket.close();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    final long result = ok ? time : -1;
+                    AndroidUtilities.runOnUIThread(() -> {
+                        proxyInfo.availableCheckTime = SystemClock.elapsedRealtime();
+                        proxyInfo.checking = false;
+                        if (result == -1) {
+                            proxyInfo.available = false;
+                            proxyInfo.ping = 0;
+                        } else {
+                            proxyInfo.available = true;
+                            proxyInfo.ping = result;
+                        }
+                        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxyCheckDone, proxyInfo);
+                    });
+                });
+            } else {
+                proxyInfo.proxyCheckPingId = ConnectionsManager.getInstance(currentAccount).checkProxy(proxyInfo.address, proxyInfo.port, proxyInfo.username, proxyInfo.password, proxyInfo.secret, time -> AndroidUtilities.runOnUIThread(() -> {
+                    proxyInfo.availableCheckTime = SystemClock.elapsedRealtime();
+                    proxyInfo.checking = false;
+                    if (time == -1) {
+                        proxyInfo.available = false;
+                        proxyInfo.ping = 0;
+                    } else {
+                        proxyInfo.ping = time;
+                        proxyInfo.available = true;
+                    }
+                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxyCheckDone, proxyInfo);
+                }));
+            }
         }
 
         if (!startedCheck) {
@@ -69,7 +99,7 @@ public class ProxyRotationController implements NotificationCenter.NotificationC
         List<SharedConfig.ProxyInfo> sortedList = new ArrayList<>(SharedConfig.proxyList);
         Collections.sort(sortedList, (o1, o2) -> Long.compare(o1.ping, o2.ping));
         for (SharedConfig.ProxyInfo info : sortedList) {
-            if (info == SharedConfig.currentProxy || info.checking || !info.available || info.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+            if (info == SharedConfig.currentProxy || info.checking || !info.available) {
                 continue;
             }
 

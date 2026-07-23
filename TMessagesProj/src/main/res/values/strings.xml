@@ -11215,4 +11215,5 @@
     <string name="ArticleAIPrompt">Write a prompt...</string>
     <string name="ArticleAIGenerate">Generate</string>
     <string name="ArticleAIAddToPage">Add to Page</string>
+    <string name="SortByPing">Sort by Ping</string>
 </resources>
