@@ -33,12 +33,13 @@ import java.util.zip.ZipInputStream;
 public class XrayProxyManager {
     public static final String LOCAL_ADDRESS = "127.0.0.1";
     private static final int DEFAULT_SOCKS_PORT = 1081;
-    private static final String DEFAULT_XRAY_VERSION = "v26.1.13";
+    private static final String DEFAULT_XRAY_VERSION = "v26.3.27";
     public static final int STATE_IDLE = 0;
     public static final int STATE_DOWNLOADING = 1;
     public static final int STATE_STARTING = 2;
     public static final int STATE_RUNNING = 3;
     public static final int STATE_FAILED = 4;
+    public static final int STATE_INSTALLING = 5;
 
     private static final Object sync = new Object();
     private static Process xrayProcess;
@@ -50,6 +51,7 @@ public class XrayProxyManager {
     private static volatile long downloadBytes = 0;
     private static volatile String lastError;
     private static Thread logReaderThread;
+    private static volatile boolean forceCoreDownload;
 
     public interface ProgressListener {
         void onDownloadStart(long totalBytes);
@@ -140,6 +142,12 @@ public class XrayProxyManager {
         return deleted;
     }
 
+    /** Downloads a fresh core even when the APK contains a bundled fallback. */
+    public static boolean requestCoreUpdate() {
+        forceCoreDownload = true;
+        return deleteCoreFiles();
+    }
+
     public static boolean isSocksReady() {
         return canConnect(200);
     }
@@ -216,7 +224,8 @@ public class XrayProxyManager {
             if (xrayDir == null) {
                 return;
             }
-            File binFile = getBundledBinary();
+            boolean downloadCore = forceCoreDownload;
+            File binFile = downloadCore ? null : getBundledBinary();
             boolean bundled = binFile != null && binFile.exists();
             if (!bundled) {
                 binFile = new File(xrayDir, "xray");
@@ -227,12 +236,14 @@ public class XrayProxyManager {
                     }
                 }
             }
+            forceCoreDownload = false;
             if (!ensureGeoFiles(xrayDir)) {
                 if (!downloadBinary(xrayDir, bundled ? null : binFile, !bundled)) {
                     markFailed("geo download failed");
                     return;
                 }
             }
+            setState(STATE_INSTALLING, null);
             if (!ensureExecutable(binFile)) {
                 markFailed("binary not executable");
                 return;

@@ -67,6 +67,7 @@ import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.LineProgressView;
 import org.telegram.ui.Components.QRCodeBottomSheet;
 import org.telegram.ui.Components.SectionsScrollView;
 
@@ -117,8 +118,10 @@ public class ProxySettingsActivity extends BaseFragment {
     private TextInfoPrivacyCell[] bottomCells = new TextInfoPrivacyCell[3];
     private TextSettingsCell shareCell;
     private TextSettingsCell pasteCell;
+    private TextSettingsCell updateCell;
     private TextSettingsCell redownloadCell;
     private TextSettingsCell xrayStatusCell;
+    private LineProgressView xrayProgressView;
     private ActionBarMenuItem doneItem;
     private RadioCell[] typeCell = new RadioCell[3];
     private int currentType = -1;
@@ -802,31 +805,21 @@ public class ProxySettingsActivity extends BaseFragment {
             showDialog(alert);
         });
 
+        updateCell = new TextSettingsCell(context);
+        updateCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
+        updateCell.setText(LocaleController.getString(R.string.XrayProxyUpdate), true);
+        updateCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+        updateCell.setVisibility(View.GONE);
+        linearLayout2.addView(updateCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        updateCell.setOnClickListener(v -> restartXrayCore());
+
         redownloadCell = new TextSettingsCell(context);
         redownloadCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
         redownloadCell.setText(LocaleController.getString(R.string.XrayProxyRedownload), false);
         redownloadCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
         redownloadCell.setVisibility(View.GONE);
         linearLayout2.addView(redownloadCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        redownloadCell.setOnClickListener(v -> {
-            if (currentType != TYPE_XRAY_VLESS) {
-                return;
-            }
-            boolean deleted = XrayProxyManager.deleteCoreFiles();
-            if (getParentActivity() != null) {
-                if (deleted) {
-                    Toast.makeText(getParentActivity(), LocaleController.getString(R.string.XrayProxyRedownloaded), Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(getParentActivity(), LocaleController.getString(R.string.XrayProxyRedownloadFailed), Toast.LENGTH_SHORT).show();
-                }
-            }
-            SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-            boolean enabled = preferences.getBoolean("proxy_enabled", false);
-            if (enabled && SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
-                XrayProxyManager.startService();
-                ConnectionsManager.setProxySettings(true, "", 0, "", "", "");
-            }
-        });
+        redownloadCell.setOnClickListener(v -> restartXrayCore());
 
         xrayStatusCell = new TextSettingsCell(context);
         xrayStatusCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
@@ -834,6 +827,12 @@ public class ProxySettingsActivity extends BaseFragment {
         xrayStatusCell.setVisibility(View.GONE);
         xrayStatusCell.setEnabled(false);
         linearLayout2.addView(xrayStatusCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        xrayProgressView = new LineProgressView(context);
+        xrayProgressView.setBackColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
+        xrayProgressView.setProgressColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+        xrayProgressView.setVisibility(View.GONE);
+        linearLayout2.addView(xrayProgressView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 4, 20, 0, 20, 12));
 
         sectionCell[1] = new ShadowSectionCell(context);
         sectionCell[1].setBackgroundDrawable(Theme.getThemedDrawableByKey(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
@@ -1050,12 +1049,50 @@ public class ProxySettingsActivity extends BaseFragment {
             } else {
                 value = LocaleController.getString(R.string.XrayProxyStatusDownloading);
             }
+        } else if (state == XrayProxyManager.STATE_INSTALLING) {
+            value = LocaleController.getString(R.string.XrayProxyStatusInstalling);
         } else if (state == XrayProxyManager.STATE_FAILED) {
             value = LocaleController.getString(R.string.XrayProxyStatusFailed);
         } else {
             value = LocaleController.getString(R.string.XrayProxyStatusIdle);
         }
         xrayStatusCell.setTextAndValue(title, value, false);
+        if (xrayProgressView != null) {
+            float progress = 0f;
+            int progressColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4);
+            if (state == XrayProxyManager.STATE_DOWNLOADING) {
+                long total = XrayProxyManager.getDownloadTotalBytes();
+                if (total > 0) {
+                    progress = Math.min(0.80f, (XrayProxyManager.getDownloadBytes() / (float) total) * 0.80f);
+                }
+            } else if (state == XrayProxyManager.STATE_INSTALLING || state == XrayProxyManager.STATE_STARTING) {
+                progress = 0.90f;
+            } else if (state == XrayProxyManager.STATE_RUNNING) {
+                progress = 0.99f;
+                progressColor = Theme.getColor(Theme.key_featuredStickers_addedIcon);
+            }
+            xrayProgressView.setProgressColor(progressColor);
+            xrayProgressView.setProgress(progress, true);
+        }
+    }
+
+    private void restartXrayCore() {
+        if (currentType != TYPE_XRAY_VLESS) {
+            return;
+        }
+        boolean deleted = XrayProxyManager.requestCoreUpdate();
+        if (!deleted) {
+            if (getParentActivity() != null) {
+                Toast.makeText(getParentActivity(), LocaleController.getString(R.string.XrayProxyRedownloadFailed), Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        SharedPreferences preferences = MessagesController.getGlobalMainSettings();
+        boolean enabled = preferences.getBoolean("proxy_enabled", false);
+        XrayProxyManager.startService();
+        if (enabled && SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+            ConnectionsManager.setProxySettings(true, "", 0, "", "", "");
+        }
     }
 
     private void setProxyType(int type, boolean animated) {
@@ -1141,6 +1178,9 @@ public class ProxySettingsActivity extends BaseFragment {
             typeCell[1].setChecked(isMtproto, animated);
             typeCell[2].setChecked(isVless, animated);
 
+            if (updateCell != null) {
+                updateCell.setVisibility(isVless ? View.VISIBLE : View.GONE);
+            }
             if (redownloadCell != null) {
                 redownloadCell.setVisibility(isVless ? View.VISIBLE : View.GONE);
             }
@@ -1149,6 +1189,9 @@ public class ProxySettingsActivity extends BaseFragment {
                 if (isVless) {
                     updateXrayStatusCell();
                 }
+            }
+            if (xrayProgressView != null) {
+                xrayProgressView.setVisibility(isVless ? View.VISIBLE : View.GONE);
             }
         }
     }

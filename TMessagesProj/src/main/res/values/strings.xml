@@ -2736,11 +2736,13 @@
     <string name="XrayProxyDownloadingPercent">Downloading Xray core... %1$d%%</string>
     <string name="XrayProxyFailed">Xray proxy failed to start</string>
     <string name="XrayProxyRedownload">Redownload Xray core</string>
+    <string name="XrayProxyUpdate">Update Xray core</string>
     <string name="XrayProxyRedownloaded">Xray core will be downloaded again</string>
     <string name="XrayProxyRedownloadFailed">Failed to remove Xray core</string>
     <string name="XrayProxyCoreStatus">Xray core</string>
     <string name="XrayProxyStatusIdle">Idle</string>
     <string name="XrayProxyStatusStarting">Starting...</string>
+    <string name="XrayProxyStatusInstalling">Installing...</string>
     <string name="XrayProxyStatusDownloading">Downloading...</string>
     <string name="XrayProxyStatusDownloadingPercent">Downloading... %1$d%%</string>
     <string name="XrayProxyStatusReady">Ready</string>

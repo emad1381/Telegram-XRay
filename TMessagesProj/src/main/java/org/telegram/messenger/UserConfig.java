@@ -24,8 +24,11 @@ import java.util.Arrays;
 public class UserConfig extends BaseController {
 
     public static int selectedAccount;
-    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 3;
-    public final static int MAX_ACCOUNT_COUNT = 4;
+    // Account-scoped controllers are allocated lazily, so ten slots provide a
+    // practical multi-account limit without the memory and notification cost of
+    // an unbounded number of accounts.
+    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 10;
+    public final static int MAX_ACCOUNT_COUNT = 10;
 
     private final Object sync = new Object();
     private volatile boolean configLoaded;
@@ -122,7 +125,7 @@ public class UserConfig extends BaseController {
     }
 
     public static int getMaxAccountCount() {
-        return hasPremiumOnAccounts() ? 5 : 3;
+        return MAX_ACCOUNT_COUNT;
     }
 
     public int getNewMessageId() {
