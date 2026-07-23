@@ -30,6 +30,10 @@ public class XrayProxyService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (intent == null && SharedConfig.currentProxy == null) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         startForeground(NOTIFICATION_ID, buildNotification());
         updateNotificationStarting();
         XrayProxyManager.setProgressListener(new XrayProxyManager.ProgressListener() {
@@ -57,7 +61,7 @@ public class XrayProxyService extends Service {
                 XrayProxyManager.ensureRunning(SharedConfig.currentProxy);
             } finally {
                 XrayProxyManager.setProgressListener(null);
-                if (XrayProxyManager.waitForSocksReady(10_000)) {
+                if (XrayProxyManager.waitForSocksReady(45_000)) {
                     XrayProxyManager.markRunning();
                     updateNotificationRunning();
                 } else {

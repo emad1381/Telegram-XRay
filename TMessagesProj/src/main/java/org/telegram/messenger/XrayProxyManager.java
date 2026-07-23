@@ -49,6 +49,7 @@ public class XrayProxyManager {
     private static volatile long downloadTotalBytes = -1;
     private static volatile long downloadBytes = 0;
     private static volatile String lastError;
+    private static Thread logReaderThread;
 
     public interface ProgressListener {
         void onDownloadStart(long totalBytes);
@@ -159,12 +160,16 @@ public class XrayProxyManager {
         if (context == null) {
             return;
         }
-        Intent intent = new Intent(context, XrayProxyService.class);
-        intent.setAction(XrayProxyService.ACTION_START);
-        if (Build.VERSION.SDK_INT >= 26) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            Intent intent = new Intent(context, XrayProxyService.class);
+            intent.setAction(XrayProxyService.ACTION_START);
+            if (Build.VERSION.SDK_INT >= 26) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        } catch (Exception e) {
+            FileLog.e("Xray: failed to start service: " + e.getMessage());
         }
     }
 
@@ -237,18 +242,23 @@ public class XrayProxyManager {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("Xray: config hash=" + configHash);
             }
-            if (xrayProcess != null && xrayProcess.isAlive() && TextUtils.equals(lastConfigHash, configHash)) {
-                return;
+            synchronized (sync) {
+                if (xrayProcess != null && xrayProcess.isAlive() && TextUtils.equals(lastConfigHash, configHash)) {
+                    return;
+                }
+                stopProcessInternal();
             }
-            stopProcessInternal();
             File configFile = new File(xrayDir, "config.json");
             writeConfig(configFile, config);
             ProcessBuilder builder = new ProcessBuilder(binFile.getAbsolutePath(), "run", "-c", configFile.getAbsolutePath());
             builder.directory(xrayDir);
             builder.redirectErrorStream(true);
-            xrayProcess = builder.start();
-            lastConfigHash = configHash;
+            synchronized (sync) {
+                xrayProcess = builder.start();
+                lastConfigHash = configHash;
+            }
             startLogReader(xrayProcess.getInputStream());
+            startProcessWatchdog(xrayProcess);
         } catch (Exception e) {
             markFailed(e.getMessage());
             FileLog.e(e);
@@ -277,18 +287,47 @@ public class XrayProxyManager {
     }
 
     private static void startLogReader(final InputStream inputStream) {
-        new Thread(() -> {
+        Thread oldThread = logReaderThread;
+        if (oldThread != null) {
+            oldThread.interrupt();
+        }
+        Thread thread = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
                 String line;
-                while ((line = reader.readLine()) != null) {
+                while (!Thread.currentThread().isInterrupted() && (line = reader.readLine()) != null) {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("xray: " + line);
                     }
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                if (!Thread.currentThread().isInterrupted()) {
+                    FileLog.e(e);
+                }
             }
-        }, "XrayLogReader").start();
+        }, "XrayLogReader");
+        logReaderThread = thread;
+        thread.start();
+    }
+
+    private static void startProcessWatchdog(final Process process) {
+        new Thread(() -> {
+            try {
+                int exitCode = process.waitFor();
+                synchronized (sync) {
+                    if (xrayProcess == process) {
+                        xrayProcess = null;
+                        lastConfigHash = null;
+                    }
+                }
+                if (state == STATE_RUNNING) {
+                    markFailed("xray exited unexpectedly (code " + exitCode + ")");
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("Xray: process exited unexpectedly with code " + exitCode);
+                    }
+                }
+            } catch (InterruptedException ignored) {
+            }
+        }, "XrayWatchdog").start();
     }
 
     private static File getBundledBinary() {
@@ -358,6 +397,7 @@ public class XrayProxyManager {
         try {
             URL downloadUrl = new URL(url);
             connection = (HttpURLConnection) downloadUrl.openConnection();
+            connection.setInstanceFollowRedirects(true);
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(30000);
             connection.connect();

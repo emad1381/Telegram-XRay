@@ -709,12 +709,16 @@ public class SharedConfig {
 
     public static ArrayList<ProxyInfo> proxyList = new ArrayList<>();
     public static LinkedList<ProxyInfo> getProxyList() {
-        while (true) {
+        int attempts = 0;
+        while (attempts < 10) {
             try {
                 return new LinkedList<>(proxyList);
             } catch (Exception ignored) {
+                attempts++;
+                android.os.SystemClock.sleep(1);
             }
         }
+        return new LinkedList<>();
     }
     private static boolean proxyListLoaded;
     public static ProxyInfo currentProxy;

@@ -213,10 +213,14 @@ public class ProxyUtil {
             }
             AndroidUtilities.runOnUIThread(() -> {
                 if (any[0]) {
+                    java.util.ArrayList<SharedConfig.ProxyInfo> toDelete = new java.util.ArrayList<>();
                     for (SharedConfig.ProxyInfo info : SharedConfig.getProxyList()) {
                         if (info.isSubscription) {
-                            SharedConfig.deleteProxy(info);
+                            toDelete.add(info);
                         }
+                    }
+                    for (SharedConfig.ProxyInfo info : toDelete) {
+                        SharedConfig.deleteProxy(info);
                     }
                     for (SharedConfig.ProxyInfo info : newProxies) {
                         SharedConfig.addProxy(info, true);
@@ -298,14 +302,18 @@ public class ProxyUtil {
             }
             AndroidUtilities.runOnUIThread(() -> {
                 if (any[0]) {
+                    java.util.ArrayList<SharedConfig.ProxyInfo> toDelete = new java.util.ArrayList<>();
                     for (SharedConfig.ProxyInfo info : SharedConfig.getProxyList()) {
                         if (!info.isSubscription) {
                             continue;
                         }
                         String groupTitle = TextUtils.isEmpty(info.subscriptionName) ? defaultTitle : info.subscriptionName;
                         if (TextUtils.equals(groupTitle, title)) {
-                            SharedConfig.deleteProxy(info);
+                            toDelete.add(info);
                         }
+                    }
+                    for (SharedConfig.ProxyInfo info : toDelete) {
+                        SharedConfig.deleteProxy(info);
                     }
                     for (SharedConfig.ProxyInfo info : newProxies) {
                         SharedConfig.addProxy(info, true);
