@@ -1270,8 +1270,10 @@ static inline uint32_t bitmapBytesPerPixel(int32_t format) {
         case ANDROID_BITMAP_FORMAT_RGBA_F16:
             return 8;
 
+#ifdef ANDROID_BITMAP_FORMAT_RGBA_1010102
         case ANDROID_BITMAP_FORMAT_RGBA_1010102:
             return 4;
+#endif
 
         default:
             return 0;

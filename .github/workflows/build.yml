@@ -2,14 +2,19 @@ name: Build Telegram-XRay APK
 
 on:
   push:
-    tags:
-      - 'v*'
+  pull_request:
   workflow_dispatch:
 
 env:
   CCACHE_DIR: /home/runner/.ccache
   CCACHE_MAXSIZE: 2G
   CCACHE_COMPILERCHECK: content
+  NDK_VERSION: 21.4.7075529
+
+# A newer commit makes an older queued build unnecessary.
+concurrency:
+  group: apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -28,34 +33,27 @@ jobs:
       - name: Install ccache
         run: |
           sudo apt-get update && sudo apt-get install -y ccache
-          ccache --set-config=max_size=2G
-          ccache --set-config=compiler_check=content
+          ccache --set-config=max_size=${CCACHE_MAXSIZE}
+          ccache --set-config=compiler_check=${CCACHE_COMPILERCHECK}
           ccache -z
           echo "NDK_CCACHE=$(which ccache)" >> $GITHUB_ENV
 
-      - name: Restore ccache
+      # ccache uses source-content hashes, so this stable cache can safely be
+      # shared by all commits built with the same native toolchain.
+      - name: Restore native build cache
         uses: actions/cache@v4
         with:
           path: /home/runner/.ccache
-          key: ccache-arm64-${{ github.sha }}
+          key: ccache-${{ runner.os }}-ndk-${{ env.NDK_VERSION }}-${{ hashFiles('TMessagesProj/jni/CMakeLists.txt', 'TMessagesProj/jni/**/*.mk') }}
           restore-keys: |
-            ccache-arm64-
-
-      - name: Restore Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-
+            ccache-${{ runner.os }}-ndk-${{ env.NDK_VERSION }}-
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -63,8 +61,8 @@ jobs:
       - name: Install NDK and Build Tools
         run: |
           yes | sdkmanager --licenses
-          sdkmanager "ndk;21.4.7075529" "build-tools;35.0.0" "platforms;android-35"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> $GITHUB_ENV
+          sdkmanager "ndk;${NDK_VERSION}" "build-tools;35.0.0" "platforms;android-35"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}" >> $GITHUB_ENV
 
       - name: Make Gradlew Executable
         run: chmod +x ./gradlew
@@ -76,6 +74,7 @@ jobs:
         run: |
           ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone \
             --build-cache \
+            --parallel \
             -Dorg.gradle.jvmargs="-Xmx3g -XX:+UseG1GC" \
             --stacktrace
 
@@ -85,28 +84,31 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Telegram-XRay-APK
+          name: Telegram-XRay-${{ github.sha }}
           path: TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
           retention-days: 30
+          if-no-files-found: error
 
-      - name: Create GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      # Every push updates one rolling pre-release. The APK asset is therefore
+      # always available at Releases without creating a release per commit.
+      - name: Publish rolling APK release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: latest
+          target_commitish: ${{ github.sha }}
+          name: Latest Telegram-XRay APK
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
-          name: "Telegram-XRay ${{ github.ref_name }}"
           body: |
-            ## 🚀 Telegram-XRay ${{ github.ref_name }}
+            ## Latest Telegram-XRay APK
 
-            **Based on:** Telegram 12.9.0 (build 6966)
-            **Architecture:** ARM64 (arm64-v8a)
+            Commit: ${{ github.sha }}
+            Branch or tag: ${{ github.ref_name }}
 
-            ### ✨ Features
-            - VLESS proxy with REALITY, TLS, WebSocket, gRPC, KCP, QUIC support
-            - Subscription URL support with auto-update
-            - Xray core integration with automatic download
-
-            ### 📥 Installation
-            Download the APK file below and install it on your Android device.
+            Download the APK asset below and install it on your Android device.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
