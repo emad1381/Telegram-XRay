@@ -2,7 +2,6 @@ name: Build Telegram-XRay APK
 
 on:
   push:
-    branches: [ master, main ]
     tags:
       - 'v*'
   workflow_dispatch:
