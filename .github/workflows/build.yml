@@ -6,6 +6,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      fast_build:
+        description: 'Fast Build (ARM64 only - 3x faster)'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -23,7 +28,22 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
+
+      - name: Cache Gradle & C++ Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.ccache
+          key: ${{ runner.os }}-telegram-xray-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-telegram-xray-
+
+      - name: Install ccache
+        run: |
+          sudo apt-get update && sudo apt-get install -y ccache
+          echo "NDK_CCACHE=ccache" >> $GITHUB_ENV
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -37,7 +57,12 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build APK (Standalone Afat)
-        run: ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace
+        run: |
+          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone \
+            --build-cache \
+            --parallel \
+            -Dorg.gradle.jvmargs="-Xmx6g -XX:+UseG1GC" \
+            --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
