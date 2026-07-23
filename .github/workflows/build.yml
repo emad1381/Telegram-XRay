@@ -64,6 +64,7 @@ jobs:
         run: |
           yes | sdkmanager --licenses
           sdkmanager "ndk;21.4.7075529" "build-tools;35.0.0" "platforms;android-35"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> $GITHUB_ENV
 
       - name: Make Gradlew Executable
         run: chmod +x ./gradlew
@@ -75,8 +76,7 @@ jobs:
         run: |
           ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone \
             --build-cache \
-            --parallel \
-            -Dorg.gradle.jvmargs="-Xmx6g -XX:+UseG1GC" \
+            -Dorg.gradle.jvmargs="-Xmx3g -XX:+UseG1GC" \
             --stacktrace
 
       - name: Show ccache stats (after build)
