@@ -144,6 +144,7 @@ import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.XrayProxyManager;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
@@ -1982,6 +1983,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private boolean ignoreOnPhoneChangePaste = false;
         private boolean nextPressed = false;
         private boolean confirmedNumber = false;
+        private boolean waitingForXrayProxy = false;
 
         private int titleClickCount = 0;
         private long lastTitleClick = 0;
@@ -3045,6 +3047,41 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             } else if (countryState == COUNTRY_STATE_INVALID && !BuildVars.DEBUG_VERSION && !(TEST_BACKEND_IN_STORE && !BuildConfig.BUNDLE)) {
                 needShowAlert(getString(R.string.RestorePasswordNoEmailTitle), getString(R.string.WrongCountry));
                 needHideProgress(false);
+                return;
+            }
+
+            // A new account has no existing native connection.  Do not send its
+            // unauthorised auth.sendCode request until the local Xray SOCKS
+            // listener is reachable; otherwise it falls back to a blocked direct
+            // connection and the login UI remains in progress indefinitely.
+            SharedPreferences proxyPreferences = MessagesController.getGlobalMainSettings();
+            if (activityMode == MODE_LOGIN
+                    && !waitingForXrayProxy
+                    && proxyPreferences.getBoolean("proxy_enabled", false)
+                    && SharedConfig.currentProxy != null
+                    && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS
+                    && !XrayProxyManager.isSocksReady()) {
+                waitingForXrayProxy = true;
+                confirmedNumber = true;
+                needShowProgress(0, false);
+                XrayProxyManager.startService();
+                Utilities.globalQueue.postRunnable(() -> {
+                    boolean ready = XrayProxyManager.waitForSocksReady(45_000);
+                    AndroidUtilities.runOnUIThread(() -> {
+                        waitingForXrayProxy = false;
+                        if (getParentActivity() == null || getParentActivity().isFinishing()) {
+                            return;
+                        }
+                        if (!ready) {
+                            confirmedNumber = false;
+                            needHideProgress(false);
+                            needShowAlert(getString(R.string.AppName), getString(R.string.ErrorOccurred));
+                            return;
+                        }
+                        ConnectionsManager.setProxySettings(true, "", 0, "", "", "");
+                        onNextPressed(code);
+                    });
+                });
                 return;
             }
             String phone = PhoneFormat.stripExceptNumbers("" + codeField.getText() + phoneField.getText());
