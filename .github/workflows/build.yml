@@ -89,8 +89,32 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      # Every push updates one rolling pre-release. The APK asset is therefore
-      # always available at Releases without creating a release per commit.
+      - name: Move latest release tag
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ref = 'tags/latest';
+            try {
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref,
+                sha: context.sha,
+                force: true
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/${ref}`,
+                sha: context.sha
+              });
+            }
+
+      # Every push updates one rolling public release. The tag is advanced
+      # first so the release always points to the APK's source commit.
       - name: Publish rolling APK release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -98,8 +122,8 @@ jobs:
           tag_name: latest
           target_commitish: ${{ github.sha }}
           name: Latest Telegram-XRay APK
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          make_latest: true
           overwrite_files: true
           fail_on_unmatched_files: true
           files: TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
