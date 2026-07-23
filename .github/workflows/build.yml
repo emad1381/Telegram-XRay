@@ -12,6 +12,9 @@ env:
   CCACHE_MAXSIZE: 2G
   CCACHE_COMPILERCHECK: content
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Android APK
