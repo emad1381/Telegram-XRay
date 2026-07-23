@@ -5,6 +5,7 @@ import static org.telegram.messenger.AndroidUtilities.lerp;
 import static org.telegram.messenger.AndroidUtilities.premiumText;
 import static org.telegram.messenger.LocaleController.getString;
 import static org.telegram.ui.Components.ImageUpdater.FOR_TYPE_CHANNEL;
+import static org.telegram.ui.Components.ImageUpdater.FOR_TYPE_COMMUNITY;
 import static org.telegram.ui.Components.ImageUpdater.FOR_TYPE_GROUP;
 import static org.telegram.ui.Components.ImageUpdater.TYPE_SUGGEST_PHOTO_FOR_USER;
 
@@ -495,9 +496,12 @@ public class AvatarConstructorFragment extends BaseFragment {
         colorPickerPreviewView.setVisibility(View.GONE);
 
         button = new ButtonWithCounterView(context, resourceProvider);
+        button.setRound();
         button.text.setHacks(false, true, false);
         if (imageUpdater.setForType == FOR_TYPE_CHANNEL) {
             buttonText = getString(R.string.SetChannelPhoto);
+        } else if (imageUpdater.setForType == FOR_TYPE_COMMUNITY) {
+            buttonText = getString(R.string.SetCommunityPhoto);
         } else if (imageUpdater.setForType == FOR_TYPE_GROUP) {
             buttonText = getString(R.string.SetGroupPhoto);
         } else if (avatarFor != null && avatarFor.type == TYPE_SUGGEST_PHOTO_FOR_USER) {
@@ -739,6 +743,24 @@ public class AvatarConstructorFragment extends BaseFragment {
         }
         backgroundSelectView.selectGradient(gradient);
         selectAnimatedEmojiDialog.setForUser(forUser = previewCell.forUser);
+    }
+
+    public void startFrom(long docId, boolean forUser) {
+        if (previewView == null) {
+            return;
+        }
+        AvatarConstructorFragment.BackgroundGradient gradient = new AvatarConstructorFragment.BackgroundGradient();
+        gradient.color1 = AvatarConstructorFragment.defaultColors[0][0];
+        gradient.color2 = AvatarConstructorFragment.defaultColors[0][1];
+        gradient.color3 = AvatarConstructorFragment.defaultColors[0][2];
+        gradient.color4 = AvatarConstructorFragment.defaultColors[0][3];
+
+        previewView.setGradient(gradient, false);
+        updateButton();
+        previewView.documentId = docId;
+        previewView.backupImageView.setAnimatedEmojiDrawable(new AnimatedEmojiDrawable(AnimatedEmojiDrawable.CACHE_TYPE_AVATAR_CONSTRUCTOR_PREVIEW, currentAccount, docId));
+        backgroundSelectView.selectGradient(gradient);
+        selectAnimatedEmojiDialog.setForUser(this.forUser = forUser);
     }
 
     public void startFrom(TLRPC.VideoSize emojiMarkup) {
@@ -1465,7 +1487,7 @@ public class AvatarConstructorFragment extends BaseFragment {
             }
         }
         if (bottomSheet != null) {
-            AndroidUtilities.setLightStatusBar(bottomSheet.getWindow(), isLight);
+            AndroidUtilities.setLightStatusBar(bottomSheet, isLight);
         }
         return isLight;
     }

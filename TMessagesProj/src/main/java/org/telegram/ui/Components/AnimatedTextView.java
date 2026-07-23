@@ -331,9 +331,7 @@ public class AnimatedTextView extends View {
                 ellipsizeGradientMatrix.reset();
                 ellipsizeGradientMatrix.postTranslate(bounds.right - rightPadding - w, 0);
                 ellipsizeGradient.setLocalMatrix(ellipsizeGradientMatrix);
-                canvas.save();
                 canvas.drawRect(bounds.right - rightPadding - w, bounds.top, bounds.right - rightPadding + AndroidUtilities.dp(1), bounds.bottom, ellipsizePaint);
-                canvas.restore();
                 canvas.restore();
             }
         }
@@ -1183,7 +1181,7 @@ public class AnimatedTextView extends View {
     protected void onDraw(Canvas canvas) {
         if (backgroundDrawable != null && (!hideBackgroundIfEmpty || drawable.isNotEmpty() > 0)) {
             final int width = (int) (getPaddingLeft() + drawable.getCurrentWidth() + getPaddingRight());
-            if (drawable.gravity == Gravity.RIGHT) {
+            if ((drawable.gravity & Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.RIGHT) {
                 backgroundDrawable.setBounds(getWidth() - width, 0, getWidth(), getHeight());
             } else {
                 backgroundDrawable.setBounds(0, 0, width, getHeight());
