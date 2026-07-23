@@ -1034,7 +1034,7 @@ public class ProxySettingsActivity extends BaseFragment {
         if (xrayStatusCell == null || currentType != TYPE_XRAY_VLESS) {
             return;
         }
-        String title = LocaleController.getString(R.string.XrayProxyCoreStatus);
+        String title = LocaleController.getString(R.string.XrayProxyCoreStatus) + " (" + XrayProxyManager.getXrayVersion() + ")";
         String value;
         int state = XrayProxyManager.getState();
         if (state == XrayProxyManager.STATE_RUNNING) {

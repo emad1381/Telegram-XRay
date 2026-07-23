@@ -78,6 +78,10 @@ public class XrayProxyManager {
         return lastError;
     }
 
+    public static String getXrayVersion() {
+        return DEFAULT_XRAY_VERSION;
+    }
+
     public static void markRunning() {
         setState(STATE_RUNNING, null);
     }
