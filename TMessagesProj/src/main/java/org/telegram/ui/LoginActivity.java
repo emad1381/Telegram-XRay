@@ -533,6 +533,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     public boolean onFragmentCreate() {
         getNotificationCenter().addObserver(this, NotificationCenter.didUpdateConnectionState);
         getNotificationCenter().addObserver(this, NotificationCenter.newSuggestionsAvailable);
+        SharedConfig.loadProxyList();
+        if (SharedConfig.isProxyEnabled() && SharedConfig.currentProxy != null) {
+            if (SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+                XrayProxyManager.startService();
+                ConnectionsManager.native_setProxySettings(currentAccount, XrayProxyManager.LOCAL_ADDRESS, XrayProxyManager.getLocalSocksPort(), "", "", "");
+            } else {
+                ConnectionsManager.native_setProxySettings(currentAccount, SharedConfig.currentProxy.address, SharedConfig.currentProxy.port, SharedConfig.currentProxy.username, SharedConfig.currentProxy.password, SharedConfig.currentProxy.secret);
+            }
+        }
         return super.onFragmentCreate();
     }
 
@@ -3054,6 +3063,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             // unauthorised auth.sendCode request until the local Xray SOCKS
             // listener is reachable; otherwise it falls back to a blocked direct
             // connection and the login UI remains in progress indefinitely.
+            SharedConfig.loadProxyList();
             SharedPreferences proxyPreferences = MessagesController.getGlobalMainSettings();
             if (activityMode == MODE_LOGIN
                     && !waitingForXrayProxy
@@ -3078,7 +3088,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                             needShowAlert(getString(R.string.AppName), getString(R.string.ErrorOccurred));
                             return;
                         }
-                        ConnectionsManager.setProxySettings(true, "", 0, "", "", "");
+                        ConnectionsManager.native_setProxySettings(currentAccount, XrayProxyManager.LOCAL_ADDRESS, XrayProxyManager.getLocalSocksPort(), "", "", "");
                         onNextPressed(code);
                     });
                 });
@@ -3190,6 +3200,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 req = changePhoneCode;
             } else {
                 ConnectionsManager.getInstance(currentAccount).cleanup(false);
+                if (SharedConfig.isProxyEnabled() && SharedConfig.currentProxy != null) {
+                    if (SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+                        ConnectionsManager.native_setProxySettings(currentAccount, XrayProxyManager.LOCAL_ADDRESS, XrayProxyManager.getLocalSocksPort(), "", "", "");
+                    } else {
+                        ConnectionsManager.native_setProxySettings(currentAccount, SharedConfig.currentProxy.address, SharedConfig.currentProxy.port, SharedConfig.currentProxy.username, SharedConfig.currentProxy.password, SharedConfig.currentProxy.secret);
+                    }
+                }
 
                 TLRPC.TL_auth_sendCode sendCode = new TLRPC.TL_auth_sendCode();
                 sendCode.api_hash = BuildVars.APP_HASH;

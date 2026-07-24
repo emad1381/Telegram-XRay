@@ -638,15 +638,15 @@ public class ConnectionsManager extends BaseController {
         String proxySecret = preferences.getString("proxy_secret", "");
         int proxyPort = preferences.getInt("proxy_port", 1080);
 
-        if (preferences.getBoolean("proxy_enabled", false) && !TextUtils.isEmpty(proxyAddress)) {
+        if (preferences.getBoolean("proxy_enabled", false)) {
+            SharedConfig.loadProxyList();
             if (SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
                 XrayProxyManager.startService();
-                if (XrayProxyManager.isSocksReady()) {
-                    native_setProxySettings(currentAccount, XrayProxyManager.LOCAL_ADDRESS, XrayProxyManager.getLocalSocksPort(), "", "", "");
-                } else {
+                native_setProxySettings(currentAccount, XrayProxyManager.LOCAL_ADDRESS, XrayProxyManager.getLocalSocksPort(), "", "", "");
+                if (!XrayProxyManager.isSocksReady()) {
                     scheduleXrayProxyApply();
                 }
-            } else {
+            } else if (!TextUtils.isEmpty(proxyAddress)) {
                 native_setProxySettings(currentAccount, proxyAddress, proxyPort, proxyUsername, proxyPassword, proxySecret);
             }
         }
@@ -974,24 +974,20 @@ public class ConnectionsManager extends BaseController {
             secret = "";
         }
 
-        if (enabled && SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
-            XrayProxyManager.startService();
-            if (XrayProxyManager.isSocksReady()) {
+        if (enabled) {
+            SharedConfig.loadProxyList();
+            if (SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+                XrayProxyManager.startService();
                 address = XrayProxyManager.LOCAL_ADDRESS;
                 port = XrayProxyManager.getLocalSocksPort();
                 username = "";
                 password = "";
                 secret = "";
-            } else {
-                scheduleXrayProxyApply();
-                enabled = false;
-                address = "";
-                port = 0;
-                username = "";
-                password = "";
-                secret = "";
+                if (!XrayProxyManager.isSocksReady()) {
+                    scheduleXrayProxyApply();
+                }
             }
-        } else if (!enabled && SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
+        } else if (SharedConfig.currentProxy != null && SharedConfig.currentProxy.proxyType == SharedConfig.ProxyInfo.PROXY_TYPE_XRAY_VLESS) {
             XrayProxyManager.stopService();
         }
 
