@@ -27,7 +27,10 @@
 #define DOWNLOAD_CONNECTIONS_COUNT 2
 #define UPLOAD_CONNECTIONS_COUNT 4
 #define CONNECTION_BACKGROUND_KEEP_TIME 10000
-#define MAX_ACCOUNT_COUNT 5
+// Keep this in sync with UserConfig.MAX_ACCOUNT_COUNT.  The Java layer can
+// initialise every configured account during application start; a smaller
+// native array causes an out-of-bounds access and an immediate native crash.
+#define MAX_ACCOUNT_COUNT 10
 #define USE_DELEGATE_HOST_RESOLVE
 
 #define USE_IPV4_ONLY 0
